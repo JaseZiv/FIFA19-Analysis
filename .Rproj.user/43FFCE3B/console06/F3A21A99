@@ -1,0 +1,8 @@
+  geom_point(alpha = 0.5) +
+]0;~/Desktop/FIFA19 Kaggle[?1034hJasons-MBP:FIFA19 Kaggle jasonzivkovic$   geom_point(alpha = 0.5) +
+bash: syntax error near unexpected token `alpha'
+]0;~/Desktop/FIFA19 KaggleJasons-MBP:FIFA19 Kaggle jasonzivkovic$ git remote add origin https://github.com/JaseZiv/FIFA19-Analysis.git
+fatal: not a git repository (or any of the parent directories): .git
+]0;~/Desktop/FIFA19 KaggleJasons-MBP:FIFA19 Kaggle jasonzivkovic$ git init
+Initialized empty Git repository in /Users/jasonzivkovic/Desktop/FIFA19 Kaggle/.git/
+]0;~/Desktop/FIFA19 KaggleJasons-MBP:FIFA19 Kaggle jasonzivkovic$ git add .
