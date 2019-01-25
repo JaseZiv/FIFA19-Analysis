@@ -2,13 +2,19 @@
 title: "FIFA19 Clustering"
 author: "Jason Zivkovic"
 date: "18/01/2019"
-output: html_document
+output:
+  html_document:
+        toc: yes
+        theme: cosmo
+        highlight: monochrome
+        code_folding: hide
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+# Introduction
 Some things I want to analyse in this EDA:
 
 - which features are highly correlated with a player's overall rating
@@ -22,8 +28,10 @@ Some things I want to analyse in this EDA:
 ```{r}
 # Load libraries
 library(tidyverse)
-library(DataExplorer)
 library(scales)
+library(ggthemes)
+
+options(highcharter.theme = hc_theme_538())
 
 options(scipen = 999)
 
@@ -48,71 +56,102 @@ fwds <- c(f1, f2, f3, f4)
 fifa_data <- fifa_data %>% 
   mutate(PositionGroup = ifelse(Position %in% gk, "GK", ifelse(Position %in% defs, "DEF", ifelse(Position %in% mids, "MID", ifelse(Position %in% fwds, "FWD", "Unknown")))))
 
+fifa_data <- fifa_data %>%
+  mutate(AgeGroup = ifelse(Age <= 20, "20 and under", ifelse(Age > 20 & Age <=25, "21 to 25", ifelse(Age > 25 & Age <= 30, "25 to 30", ifelse(Age > 30 & Age <= 35, "31 to 35", "Over 35")))))
+
 
 
 ```
 
+# Player Valuations
 
 ```{r}
-
-
-
+fifa_data %>%
+  ggplot(aes(x= ValueNumeric_pounds)) +
+  geom_histogram(color = "white") +
+  scale_x_continuous(labels = dollar_format(prefix = "€")) +
+  ggtitle("What Are Players Worth?", subtitle = "As expected, player valuations are \nheavily positively skewed") +
+  theme_fivethirtyeight()
 ```
 
 
-
+## Age vs Valuations
 
 ```{r}
-plot_missing(fifa_data)
+fifa_data %>%
+  ggplot(aes(x= AgeGroup, y= ValueNumeric_pounds)) +
+  geom_boxplot(fill = "orange", color = "black") +
+  scale_y_log10(labels = dollar_format(prefix = "€")) +
+  ggtitle("Age and Valuation", subtitle = "Valuation on a log scale, so differences \nbetween the age groups are significant") +
+  theme_fivethirtyeight()
 ```
+
+## Position vs Valuations
+
+Which position has the highest valuations?
+```{r}
+a <- fifa_data %>%
+  filter(PositionGroup != "Unknown") %>%
+  ggplot(aes(x= PositionGroup, y= ValueNumeric_pounds)) +
+  geom_boxplot(fill = "orange", color = "black") +
+  scale_y_log10(labels = dollar_format(prefix = "€")) +
+  ggtitle("Positions to Break The Piggybank", subtitle = "Attackers and midfielders bring the fans to games... \nPay them the money!") +
+  theme_fivethirtyeight()
+
+
+b <- fifa_data %>%
+  filter(PositionGroup != "Unknown") %>%
+  ggplot(aes(x= Position, y= ValueNumeric_pounds)) +
+  geom_boxplot(fill = "orange", color = "black") +
+  scale_y_log10(labels = dollar_format(prefix = "€")) +
+  coord_flip() +
+  theme_fivethirtyeight() +
+  facet_wrap(~ PositionGroup, scales = "free") +
+  theme(strip.background = element_rect(fill = "darkgrey"), strip.text = element_text(colour = "white", face = "bold"))
+
+gridExtra::grid.arrange(a, b)
+
+```
+
+
+Is there a relationship between the players rating and valuation?
+```{r}
+fifa_data %>%
+  filter(PositionGroup != "Unknown") %>%
+  ggplot(aes(x= Overall, y= ValueNumeric_pounds, fill = PositionGroup)) +
+  geom_point(position = "jitter", shape = 21, color = "black") +
+  scale_y_log10(labels = dollar_format(prefix = "€")) +
+  theme_fivethirtyeight()
+```
+
+
 
 What are the most played positions in FIFA19
 ```{r}
 fifa_data %>% 
   count(PositionGroup, sort = T) %>% 
   ggplot(aes(x= reorder(PositionGroup,n), y= n)) +
-  geom_col() +
-  coord_flip()
+  geom_col(fill = "orange", color = "black") +
+  scale_y_continuous(labels = comma) +
+  coord_flip() +
+  theme_fivethirtyeight()
 
 
 fifa_data %>%
   filter(PositionGroup != "Unknown") %>%
   count(PositionGroup, Position) %>%
   ggplot(aes(x= reorder(Position, n), y= n)) +
-  geom_col() +
+  geom_col(fill = "orange", color = "black") +
   coord_flip() +
-  facet_wrap(~ PositionGroup, scales = "free")
-```
-
-Which position has the highest valuations?
-```{r}
-fifa_data %>%
-  filter(PositionGroup != "Unknown") %>%
-  ggplot(aes(x= PositionGroup, y= ValueNumeric_pounds)) +
-  geom_boxplot(color = "midnightblue", fill = "white") +
-  scale_y_log10(labels = dollar_format(prefix = "€")) +
-  coord_flip() +
-  theme_bw()
-
-
-fifa_data %>%
-  filter(PositionGroup != "Unknown") %>%
-  ggplot(aes(x= Position, y= ValueNumeric_pounds)) +
-  geom_boxplot(color = "midnightblue", fill = "white") +
-  scale_y_log10(labels = dollar_format(prefix = "€")) +
-  coord_flip() +
-  theme_bw() +
-  facet_wrap(~ PositionGroup, scales = "free")
-
-fifa_data %>%
-  ggplot(aes(x= Position, y= log(ValueNumeric_pounds))) +
-  geom_boxplot(color = "midnightblue", fill = "white") +
-  coord_flip() +
-  theme_bw()
+  scale_y_continuous(labels = comma) +
+  theme_fivethirtyeight() +
+  facet_wrap(~ PositionGroup, scales = "free") +
+  theme(strip.background = element_rect(fill = "darkgrey"), strip.text = element_text(colour = "white", face = "bold"))
 ```
 
 
-```{r}
+
+```{r, fig.width=12, fig.height=12}
 gk_vars <- fifa_data %>% select(contains("GK")) %>% names()
 
 
@@ -132,26 +171,31 @@ fifa_data %>%
   arrange(desc(wildcard_rating)) %>%
   head(n=20) %>%
   ggplot(aes(x= reorder(Name, Potential), y= Overall)) +
-  geom_bar(stat = "identity", position = "dodge", aes(y=Potential)) +
+  geom_bar(stat = "identity", position = "dodge", aes(y=Potential), fill = "orange", color = "black") +
   coord_flip() +
-  geom_text(aes(label = paste(wildcard_rating, Value)))
+  geom_text(aes(label = paste(wildcard_rating, Value))) +
+  theme_fivethirtyeight()
   
 ```
 
 
-Is there a relationship between the players rating and valuation?
+
+
 ```{r}
-fifa_data %>%
-  ggplot(aes(x= Overall, y= ValueNumeric_pounds)) +
-  geom_point(position = "jitter", alpha = 0.5) +
-  scale_y_log10(labels = dollar_format(prefix = "€"))
-
-
-value_rating_lm <- lm(ValueNumeric_pounds  ~ Overall + Age, data = fifa_data)
-
-summary(value_rating_lm)
+# value_rating_lm <- lm(log(ValueNumeric_pounds +1) ~ Overall + AgeGroup + Potential + `International Reputation`, data = subset(fifa_data, PositionGroup == "MID"))
+# 
+# summary(value_rating_lm)
+# 
+# hist(value_rating_lm$residuals)
+# 
+# 
+# fifa_data_MID <- fifa_data %>%
+#   filter(PositionGroup == "MID")
+# 
+# fifa_data_MID$PredValue <- exp(predict(value_rating_lm, fifa_data_MID))
 
 ```
+
 
 # Free Valuation Players
 
@@ -159,17 +203,124 @@ Are there some real bargains to be had?
 
 ```{r}
 fifa_data %>%
+  filter(PositionGroup != "Unknown") %>%
   filter(ValueNumeric_pounds == 0) %>%
   ggplot(aes(x= Position, y= Overall)) +
-  geom_boxplot() +
-  coord_flip()
+  geom_boxplot(color = "black", fill = "orange") +
+  coord_flip() +
+  facet_wrap(~ PositionGroup, scales = "free") +
+  theme_fivethirtyeight()
 
 fifa_data %>%
-  filter(ValueNumeric_pounds == 0) %>%
-  ggplot(aes(x= Age, y= Overall)) +
+  filter(ValueNumeric_pounds == 0, PositionGroup != "Unknown") %>%
+  ggplot(aes(x= Age, y= Overall, colour = PositionGroup)) +
   geom_text(aes(label = Name), check_overlap = T) +
-  theme_classic()
+  theme_fivethirtyeight() +
+  ggtitle("Free Valuation Players plotted by age and potential", subtitle = "If a mid is needed, L. Paredes would be a target - young, and Potential ~ 80")
+```
 
+
+
+
+# Manager Career
+
+If playing the manager career is your thing (like it is mine), the below analysis should hopefully guide you to pick a team to manage based on different variables that are important to you.
+
+Personally, I'm always wanting to take control of a young, attacking team...taking control of a powerhouse isn't really my thing - the expectation is far too great!
+
+# Which Leagues have the highest overall talent
+
+```{r}
+fifa_data %>%
+  ggplot(aes(x= Overall)) +
+  geom_histogram(color = "white", fill = "orange") +
+  ggtitle("Distribution of Player Overall Rating", subtitle = "Normally distributed so mean as measure of central tendancy appropriate") +
+  theme_fivethirtyeight() +
+  theme(axis.text.y = element_blank())
+```
+
+
+
+```{r}
+fifa_data %>%
+  group_by(Club) %>%
+  summarise(AverageRating = mean(Overall, na.rm = T)) %>%
+  arrange(desc(AverageRating)) %>%
+  head(n = 20) %>%
+  ggplot(aes(x= reorder(Club,AverageRating), y= AverageRating)) +
+  geom_col(fill = "lightgrey", color = "black") +
+  ggtitle("Teams with the highest average rating of players") +
+  coord_flip() +
+  theme_fivethirtyeight()
+  
+```
+
+
+```{r}
+sum(fifa_data$Overall >= 85)
+```
+
+```{r}
+fifa_data %>%
+  mutate(ElitePlayers = ifelse(Overall >= 85, "Elite", "Not Elite")) %>%
+  group_by(Club, ElitePlayers) %>%
+  filter(ElitePlayers == "Elite") %>%
+  summarise(NumberElitePlayers = n()) %>%
+  filter(NumberElitePlayers >1) %>%
+  arrange(desc(NumberElitePlayers)) %>%
+  ggplot(aes(x= reorder(Club,NumberElitePlayers), y= NumberElitePlayers)) +
+  geom_col(fill = "lightgrey", color = "black") +
+  ggtitle("Clubs with more than one 'elite' player", subtitle = "Elite players being those with a rating greater than 85") +
+  scale_y_continuous(breaks = seq(0,12,1))+
+  coord_flip() +
+  theme_fivethirtyeight()
+```
+
+
+```{r}
+fifa_data %>%
+  ggplot(aes(x= Potential)) +
+  geom_histogram(color = "white", fill = "orange") +
+  ggtitle("Distribution of Player Potential Rating", subtitle = "Normally distributed so mean as measure of central tendancy appropriate") +
+  theme_fivethirtyeight() +
+  theme(axis.text.y = element_blank())
+```
+
+
+
+```{r}
+fifa_data %>%
+  group_by(Club) %>%
+  summarise(AveragePotential = mean(Potential, na.rm = T)) %>%
+  arrange(desc(AveragePotential)) %>%
+  head(n = 20) %>%
+  ggplot(aes(x= reorder(Club,AveragePotential), y= AveragePotential)) +
+  geom_col(fill = "lightgrey", color = "black") +
+  ggtitle("Teams with the highest average Potential of players") +
+  coord_flip() +
+  theme_fivethirtyeight()
+  
+```
+
+
+```{r}
+sum(fifa_data$Overall >= 85)
+```
+
+```{r}
+fifa_data %>%
+  mutate(ElitePlayers = ifelse(Overall >= 85, "Elite", "Not Elite")) %>%
+  group_by(Club, ElitePlayers) %>%
+  filter(ElitePlayers == "Elite") %>%
+  summarise(NumberElitePlayers = n()) %>%
+  filter(NumberElitePlayers >1) %>%
+  arrange(desc(NumberElitePlayers)) %>%
+  ggplot(aes(x= reorder(Club,NumberElitePlayers), y= NumberElitePlayers)) +
+  geom_col(fill = "lightgrey", color = "black") +
+  ggtitle("Clubs with more than one 'elite' player", subtitle = "Elite players being those with a rating greater than 85") +
+  scale_y_continuous(breaks = seq(0,12,1))+
+  coord_flip() +
+  theme_fivethirtyeight()
 ```
 
 
