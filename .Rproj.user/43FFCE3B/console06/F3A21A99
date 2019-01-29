@@ -6,3 +6,41 @@ fatal: not a git repository (or any of the parent directories): .git
 ]0;~/Desktop/FIFA19 KaggleJasons-MBP:FIFA19 Kaggle jasonzivkovic$ git init
 Initialized empty Git repository in /Users/jasonzivkovic/Desktop/FIFA19 Kaggle/.git/
 ]0;~/Desktop/FIFA19 KaggleJasons-MBP:FIFA19 Kaggle jasonzivkovic$ git add .
+]0;~/Desktop/FIFA19 KaggleJasons-MBP:FIFA19 Kaggle jasonzivkovic$ git commit -m "Initial commit"[C[1P[1@i
+[master (root-commit) fe481ce] initial commit
+ 21 files changed, 18769 insertions(+)
+ create mode 100644 .DS_Store
+ create mode 100644 .Rproj.user/43FFCE3B/console06/F3A21A99
+ create mode 100644 .Rproj.user/43FFCE3B/console06/F3A21A99.env
+ create mode 100644 .Rproj.user/43FFCE3B/console06/INDEX001
+ create mode 100644 .Rproj.user/43FFCE3B/sources/prop/B75AA1DD
+ create mode 100644 .Rproj.user/43FFCE3B/sources/prop/INDEX
+ create mode 100644 .Rproj.user/43FFCE3B/sources/s-E8FC3FC6/31C12CFD
+ create mode 100644 .Rproj.user/43FFCE3B/sources/s-E8FC3FC6/31C12CFD-contents
+ create mode 100644 .Rproj.user/43FFCE3B/sources/s-E8FC3FC6/4852574
+ create mode 100644 .Rproj.user/43FFCE3B/sources/s-E8FC3FC6/4852574-contents
+ create mode 100644 .Rproj.user/43FFCE3B/sources/s-E8FC3FC6/BBCA6F37-contents
+ create mode 100644 .Rproj.user/43FFCE3B/sources/s-E8FC3FC6/E6EE5A8E
+ create mode 100644 .Rproj.user/43FFCE3B/sources/s-E8FC3FC6/E6EE5A8E-contents
+ create mode 100644 .Rproj.user/43FFCE3B/sources/s-E8FC3FC6/lock_file
+ create mode 100644 .Rproj.user/shared/notebooks/8E7C7D85-Fifa EDA/1/s/chunks.json
+ create mode 100644 .Rproj.user/shared/notebooks/patch-chunk-names
+ create mode 100644 .Rproj.user/shared/notebooks/paths
+ create mode 100644 FIFA19 Kaggle.Rproj
+ create mode 100644 analysis/Fifa EDA.Rmd
+ create mode 100644 data/.DS_Store
+ create mode 100755 data/data.csv
+]0;~/Desktop/FIFA19 KaggleJasons-MBP:FIFA19 Kaggle jasonzivkovic$ git remote add origin https://github.com/JaseZiv/FIFA19-Analysis.git
+]0;~/Desktop/FIFA19 KaggleJasons-MBP:FIFA19 Kaggle jasonzivkovic$ git push -u origin master
+Counting objects: 32, done.
+Delta compression using up to 8 threads.
+Compressing objects:   3% (1/26)   Compressing objects:   7% (2/26)   Compressing objects:  11% (3/26)   Compressing objects:  15% (4/26)   Compressing objects:  19% (5/26)   Compressing objects:  23% (6/26)   Compressing objects:  26% (7/26)   Compressing objects:  30% (8/26)   Compressing objects:  34% (9/26)   Compressing objects:  38% (10/26)   Compressing objects:  42% (11/26)   Compressing objects:  46% (12/26)   Compressing objects:  50% (13/26)   Compressing objects:  53% (14/26)   Compressing objects:  57% (15/26)   Compressing objects:  61% (16/26)   Compressing objects:  65% (17/26)   Compressing objects:  69% (18/26)   Compressing objects:  73% (19/26)   Compressing objects:  76% (20/26)   Compressing objects:  80% (21/26)   Compressing objects:  84% (22/26)   Compressing objects:  88% (23/26)   Compressing objects:  92% (24/26)   Compressing objects:  96% (25/26)   Compressing objects: 100% (26/26)   Compressing objects: 100% (26/26), done.
+Writing objects:   3% (1/32)   Writing objects:   6% (2/32)   Writing objects:  12% (4/32)   Writing objects:  15% (5/32)   Writing objects:  18% (6/32)   Writing objects:  21% (7/32)   Writing objects:  25% (8/32)   Writing objects:  28% (9/32)   Writing objects:  31% (10/32)   Writing objects:  34% (11/32)   Writing objects:  37% (12/32)   Writing objects:  40% (13/32)   Writing objects:  43% (14/32)   Writing objects:  46% (15/32)   Writing objects:  50% (16/32)   Writing objects:  53% (17/32)   Writing objects:  59% (19/32)   Writing objects:  62% (20/32)   Writing objects:  65% (21/32)   Writing objects:  68% (22/32)   Writing objects:  71% (23/32)   Writing objects:  75% (24/32)   Writing objects:  78% (25/32)   Writing objects:  81% (26/32)   Writing objects:  84% (27/32)   Writing objects:  87% (28/32)   Writing objects:  90% (29/32)   Writing objects:  93% (30/32)   Writing objects:  96% (31/32)   Writing objects:  96% (31/32), 1.07 MiB | 635.00 KiB/s   Writing objects: 100% (32/32), 1.07 MiB | 635.00 KiB/s   Writing objects: 100% (32/32), 2.09 MiB | 897.00 KiB/s, done.
+Total 32 (delta 2), reused 0 (delta 0)
+remote: Resolving deltas:   0% (0/2)   [Kremote: Resolving deltas:  50% (1/2)   [Kremote: Resolving deltas: 100% (2/2)   [Kremote: Resolving deltas: 100% (2/2), done.[K
+To https://github.com/JaseZiv/FIFA19-Analysis.git
+ * [new branch]      master -> master
+Branch 'master' set up to track remote branch 'master' from 'origin'.
+]0;~/Desktop/FIFA19 Kaggle[?1034hJasons-MacBook-Pro:FIFA19 Kaggle jasonzivkovic$ ls
+FIFA19 Kaggle.Rproj	analysis		data			images
+]0;~/Desktop/FIFA19 KaggleJasons-MacBook-Pro:FIFA19 Kaggle jasonzivkovic$ git add .

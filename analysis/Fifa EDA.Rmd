@@ -1,12 +1,12 @@
 ---
-title: "FIFA19 Clustering"
+title: "Analysis to Help Club Managers"
 author: "Jason Zivkovic"
 date: "18/01/2019"
 output:
   html_document:
         toc: yes
-        theme: cosmo
-        highlight: monochrome
+        theme: spacelab
+        highlight: tango
         code_folding: hide
 ---
 
@@ -15,32 +15,48 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 # Introduction
-Some things I want to analyse in this EDA:
 
-- which features are highly correlated with a player's overall rating
-- analyse the differences between a player's current rating and their potential rating
-- find out which teams have the highest potential
-- find out the youngest teams / oldest teams
-- use k-means clustering to try to find "bargains"; ie if there is someone with the same skills/potential, can they be found for a bargain?
+From Wikipedia: 
+
+*FIFA 19 is a football simulation video game developed by EA Vancouver as part of Electronic Arts' FIFA series. Announced on 6 June 2018 for its E3 2018 press conference, it was released on 28 September 2018 for PlayStation 3, PlayStation 4, Xbox 360, Xbox One, Nintendo Switch, and Microsoft Windows. It is the 26th installment in the FIFA series. As with FIFA 18, Cristiano Ronaldo appears as the cover athlete of the regular edition.* https://en.wikipedia.org/wiki/FIFA_19
+
+The game features a number of different playing modes, however Career mode as a manager holds the most appeal for me.
+
+The following analysis will be tailored toward having the best chance at success in that mode for anyone interested.
 
 
+**Some things I want to analyse in this paper:**
 
-```{r}
+- High level Exploratory Data Analysis
+- Which features are highly correlated with a player's overall rating by player position
+- Analyse the differences between a player's current rating and their potential rating
+- Find out which teams have the highest potential
+- Find out the youngest teams / oldest teams
+- Use k-means clustering to try to find "bargains"; ie if there is someone with the same skills/potential, can they be found for a bargain?
+
+# Feature engineering
+
+```{r, warning=FALSE, message=FALSE}
 # Load libraries
 library(tidyverse)
 library(scales)
 library(ggthemes)
-
-options(highcharter.theme = hc_theme_538())
+library(kableExtra)
 
 options(scipen = 999)
 
-fifa_data <- read_csv("data/data.csv")
+fifa_data <- read_csv("../data/data.csv")
 
 fifa_data <- fifa_data %>%
   mutate(ValueMultiplier = ifelse(str_detect(Value, "K"), 1000, ifelse(str_detect(Value, "M"), 1000000, 1))) %>%
   mutate(ValueNumeric_pounds = as.numeric(str_extract(Value, "[0-9]+")) * ValueMultiplier) %>%
   mutate(Position = ifelse(is.na(Position), "Unknown", Position))
+
+
+fifa_data <- fifa_data %>%
+  mutate(WageMultiplier = ifelse(str_detect(Wage, "K"), 1000, ifelse(str_detect(Wage, "M"), 1000000, 1))) %>%
+  mutate(WageNumeric_pounds = as.numeric(str_extract(Wage, "[0-9]+")) * WageMultiplier)
+
 
 positions <- unique(fifa_data$Position)
 
@@ -58,42 +74,82 @@ fifa_data <- fifa_data %>%
 
 fifa_data <- fifa_data %>%
   mutate(AgeGroup = ifelse(Age <= 20, "20 and under", ifelse(Age > 20 & Age <=25, "21 to 25", ifelse(Age > 25 & Age <= 30, "25 to 30", ifelse(Age > 30 & Age <= 35, "31 to 35", "Over 35")))))
-
-
-
 ```
+
+**1. Player Valuation**
+The raw data has player valuations as a character string, with a designation at the end specifying whether the value is thousands or millions. Regex is used to create a numeric variable called `ValueNumeric_pounds`
+
+**2. Player Wage**
+See Point 1 above. Same transformation has occurred for player Wage
+
+**3. Player Positions**
+There are `r length(unique(fifa_data$Position))` different positions in FIFA2019. To make analysis less granular, I have decided to create four groupings; *GK*, *DEF*, *MID* and *FWD*.
+
+**4. Player Age**
+I have decided to group players into age buckets, in 5 year increments other than for players 20 years and younger, and players 35 years and over.
+
+***
+
+# Overall Ratings
+
+Player ratings are normally distributed in FIFA19, with a mean of `r round(mean(fifa_data$Overall, na.rm = T),4)` and standard deviation of `r round(sd(fifa_data$Overall, na.rm = T),4)`
+
+```{r, message=FALSE, warning=FALSE, fig.width=12, fig.height=8}
+fifa_data %>%
+  ggplot(aes(x= Overall)) +
+  geom_histogram(color = "white", fill = "darkgrey") +
+  ggtitle("Player Ratings Are Normally Distributed", subtitle = "The mean can be used as a measure of central tendancy") +
+  theme_fivethirtyeight() +
+  theme(axis.text.y = element_blank())
+```
+
 
 # Player Valuations
 
-```{r}
-fifa_data %>%
+Player valuations show a heavily positive skew, being skewed by the superstars of the game - Messi, Neymar, De Bryune, etc.
+```{r, message=FALSE, warning=FALSE, fig.width=12, fig.height=8}
+p <- fifa_data %>%
   ggplot(aes(x= ValueNumeric_pounds)) +
-  geom_histogram(color = "white") +
+  geom_histogram(color = "white", fill = "darkgrey") +
   scale_x_continuous(labels = dollar_format(prefix = "€")) +
-  ggtitle("What Are Players Worth?", subtitle = "As expected, player valuations are \nheavily positively skewed") +
+  ggtitle("Player Valuations Are Heavily Skewed", subtitle = "Long tail indicates there are some extreme outliers") +
   theme_fivethirtyeight()
+
+p +
+  geom_text(data = subset(fifa_data, Name == "Neymar Jr"), aes(x= ValueNumeric_pounds, y= 500, label=Name), color = "purple") +
+  geom_text(data = subset(fifa_data, Name == "L. Messi"), aes(x= ValueNumeric_pounds, y= 1000, label=Name), color = "purple") +
+  geom_text(data = subset(fifa_data, Name == "K. De Bruyne"), aes(x= ValueNumeric_pounds, y= 200, label=Name), color = "purple") +
+  geom_text(data = subset(fifa_data, Name == "E. Hazard"), aes(x= ValueNumeric_pounds, y= 500, label=Name), color = "purple") +
+  geom_text(data = subset(fifa_data, Name == "P. Dybala"), aes(x= ValueNumeric_pounds, y= 1000, label=Name), color = "purple")
+  
+
 ```
 
 
 ## Age vs Valuations
 
-```{r}
+It is intuitive to think that players get better with age and experience and that their valuations would refelect this relationship.
+
+Plotting the relationship below, it can be seen that as players age, their valuations tend to increase up to their early 30s, and then begin declining in the years of age between 31-35, and then rapidly decline for players older than 35.
+```{r, message=FALSE, warning=FALSE, fig.width=12, fig.height=8}
 fifa_data %>%
   ggplot(aes(x= AgeGroup, y= ValueNumeric_pounds)) +
-  geom_boxplot(fill = "orange", color = "black") +
+  geom_boxplot(fill = "darkgrey") +
   scale_y_log10(labels = dollar_format(prefix = "€")) +
-  ggtitle("Age and Valuation", subtitle = "Valuation on a log scale, so differences \nbetween the age groups are significant") +
+  ggtitle("Players Are In High Demand In Their Mid-20s", subtitle = "Valuation on a log scale, so differences \nbetween the age groups are significant") +
   theme_fivethirtyeight()
 ```
 
 ## Position vs Valuations
 
-Which position has the highest valuations?
-```{r}
+As expected, Forwards and Midfieldrs are going to cost you more than Defenders and Goalkeepers.
+
+Specifically, it's left and right forwards and left and right attacking-midfielders that are the most expensive positions.
+```{r, message=FALSE, warning=FALSE, fig.width=12, fig.height=12}
 a <- fifa_data %>%
   filter(PositionGroup != "Unknown") %>%
   ggplot(aes(x= PositionGroup, y= ValueNumeric_pounds)) +
-  geom_boxplot(fill = "orange", color = "black") +
+  geom_boxplot(fill = "darkgrey") +
   scale_y_log10(labels = dollar_format(prefix = "€")) +
   ggtitle("Positions to Break The Piggybank", subtitle = "Attackers and midfielders bring the fans to games... \nPay them the money!") +
   theme_fivethirtyeight()
@@ -102,7 +158,7 @@ a <- fifa_data %>%
 b <- fifa_data %>%
   filter(PositionGroup != "Unknown") %>%
   ggplot(aes(x= Position, y= ValueNumeric_pounds)) +
-  geom_boxplot(fill = "orange", color = "black") +
+  geom_boxplot(fill = "darkgrey") +
   scale_y_log10(labels = dollar_format(prefix = "€")) +
   coord_flip() +
   theme_fivethirtyeight() +
@@ -114,75 +170,522 @@ gridExtra::grid.arrange(a, b)
 ```
 
 
-Is there a relationship between the players rating and valuation?
-```{r}
+## Player Rating and Valuations
+
+There a strong positive relationship between the players rating and valuation with a Spearman correlation of 0.9063. The Spearman method was used to calculate the correlation because of presence of large outliers. 
+```{r, message=FALSE, warning=FALSE, fig.width=12, fig.height=8}
 fifa_data %>%
   filter(PositionGroup != "Unknown") %>%
-  ggplot(aes(x= Overall, y= ValueNumeric_pounds, fill = PositionGroup)) +
-  geom_point(position = "jitter", shape = 21, color = "black") +
-  scale_y_log10(labels = dollar_format(prefix = "€")) +
-  theme_fivethirtyeight()
-```
-
-
-
-What are the most played positions in FIFA19
-```{r}
-fifa_data %>% 
-  count(PositionGroup, sort = T) %>% 
-  ggplot(aes(x= reorder(PositionGroup,n), y= n)) +
-  geom_col(fill = "orange", color = "black") +
-  scale_y_continuous(labels = comma) +
-  coord_flip() +
-  theme_fivethirtyeight()
-
-
-fifa_data %>%
-  filter(PositionGroup != "Unknown") %>%
-  count(PositionGroup, Position) %>%
-  ggplot(aes(x= reorder(Position, n), y= n)) +
-  geom_col(fill = "orange", color = "black") +
-  coord_flip() +
-  scale_y_continuous(labels = comma) +
+  ggplot(aes(x= Overall, y= ValueNumeric_pounds)) +
+  geom_point(position = "jitter", color = "darkgrey") +
+  ggtitle("Higher Ratings Cost More Money", subtitle = "There are still some high rating players that \ndon't cost an arm and a leg") +
+  scale_y_continuous(labels = dollar_format(prefix = "€")) +
   theme_fivethirtyeight() +
-  facet_wrap(~ PositionGroup, scales = "free") +
-  theme(strip.background = element_rect(fill = "darkgrey"), strip.text = element_text(colour = "white", face = "bold"))
+  annotate("text", x= 70, y= 97000000, label = paste0("Spearman Correlation: ", round(cor(fifa_data$Overall, fifa_data$ValueNumeric_pounds, method = "spearman"),4)), color = "darkgreen", size = 8)
+
 ```
 
 
+## Correlation Matrix for all except GK
 
-```{r, fig.width=12, fig.height=12}
+The below correlation matrix displays the correlation amongst attribute variables for all players except goalkeepers. The Pearson method is used here as Player Value hasn't been included, which is prone to extreme outliers that could skew the results.
+
+The attributes with the highest positive correlation with a player's overall rating for non-GK players are:
+
+- `Special`
+- `Reactions`
+- `Composure`
+- `Short Passing`
+- `Ball Control`
+
+`Balance` has the lowest correlation with a player's overall rating.
+
+```{r, message=FALSE, warning=FALSE, fig.width=12, fig.height=12}
 gk_vars <- fifa_data %>% select(contains("GK")) %>% names()
 
 
-fifa_data %>%
+test <- fifa_data %>%
+  filter(Position != "GK") %>%
   select_if(is.numeric) %>%
-  select(-gk_vars) %>%
+  select(-gk_vars, -ID, -X1, -starts_with("Value"), - `Jersey Number`, -starts_with("Wage")) %>%
   as.matrix() %>%
   na.omit() %>%
-  cor() %>%
-  corrplot::corrplot()
+  cor() %>% 
+  corrplot::corrplot(method = "square")
+
 ```
 
-Who are the biggest wildcards (players with the biggest differential between overall and potential)
-```{r}
-fifa_data %>%
-  mutate(wildcard_rating = Potential - Overall) %>%
-  arrange(desc(wildcard_rating)) %>%
+## Which positions are skilled in which attributes
+
+The heat map below displays the median attributes for each position available. The analysis was done on players other than goalkeepers, and also only on players with an overall rating of 75 or higher.
+
+It shows that centre backs are high on strength and are typically strong in agression. Right and Left Wingers and Left Forwards are very agile, while Left and Right Midfielders have great acceleration.
+
+```{r, message=FALSE, warning=FALSE, fig.width=12, fig.height=12}
+tile_data <- fifa_data %>%
+  select_if(is.numeric) %>%
+  select(-gk_vars) %>%
+  left_join(fifa_data %>% select(ID, Position, PositionGroup), by = "ID") %>%
+  filter(Overall >= 70) %>%
+  select(-X1, -ID, -`International Reputation`, -`Jersey Number`, -`Skill Moves`, -Special, -ValueMultiplier, -ValueNumeric_pounds, -`Weak Foot`, -Age, -Overall, -Potential, -starts_with("Wage"))
+
+
+tile_data <- tile_data %>%
+  filter(Position != "GK") %>%
+  gather(key = Attribute, value = Value, -Position, -PositionGroup) %>%
+  group_by(PositionGroup, Position, Attribute) %>%
+  summarise(MedianValue = median(Value, na.rm = T))
+
+tile_data %>%
+  filter(Position != "Unknown") %>%
+  ggplot(aes(x= Attribute, y= Position)) +
+  geom_tile(aes(fill = MedianValue), colour = "black") +
+  geom_text(aes(label = MedianValue)) +
+  scale_fill_gradient(low = "purple", high = "green") +
+  ggtitle("Centre Backs Are Strong, Left Forwards Are Agile", subtitle = "Analysing the median ratings for each of the attributes for \neach position for players with and overall rating over 75") +
+  theme_fivethirtyeight() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), strip.text = element_text(face = "bold", size = 12), legend.position = "none") +
+  facet_wrap(~ PositionGroup, scales = "free", ncol = 1)
+
+```
+
+***
+
+# Helping me manage a team
+
+The next section will be devoted to analysis that will assist those wanting to magae a team. I will analyse which players to target if you want to manage a team in rebuilding mode, players to target with a low budget if managing lower division teams or lower-budget teams, which teams to manage if tyou want an attacking team, or a defensive team.
+
+
+## Young Player Analysis
+
+If you are wanting to be a manager that gives youngsters a chance and watch them blossom, then the list of below players might be ones to target.
+
+The violet bars indicate the difference between the player's potential and their current overally rating. *J. von Moos*, a striker (17 years old and costs €280K) and *D. Campbell*, a central midfielder (also 17 years old and only costs €60K) are the two players with the highest room to grow, with both players having a differential of 26. *R. Griffiths*, also a striker, but 18 years old, has a potential of 84, however will cost you €575K. I know who I'd be choosing between Griffiths and the previously mentioned J. von Moos who also has an overall rating of 84.
+
+If it's a real bargain you're looking for, the 16 year old central midfielder *B. Mumba* will only cost you €190K, but has a potential rating of 80... Juicy!
+
+```{r, message=FALSE, warning=FALSE, fig.width=12, fig.height=8}
+holder <- fifa_data %>%
+  mutate(RoomToGrow = Potential - Overall) %>%
+  arrange(desc(RoomToGrow)) %>%
   head(n=20) %>%
-  ggplot(aes(x= reorder(Name, Potential), y= Overall)) +
-  geom_bar(stat = "identity", position = "dodge", aes(y=Potential), fill = "orange", color = "black") +
+  select(Name, Value, Overall, Age, RoomToGrow, Position) %>%
+  gather(key = Mult, value = ExpectedValue, -Name, -Value, -Age, -Position) %>%
+  mutate(Mult = factor(x=Mult, levels = c("RoomToGrow", "Overall")))
+
+
+holder %>%
+  ggplot(aes(x= Name, y= ExpectedValue, fill = Mult)) +
+  geom_bar(stat = "identity", position = "stack", color = "black") +
   coord_flip() +
-  geom_text(aes(label = paste(wildcard_rating, Value))) +
-  theme_fivethirtyeight()
+  scale_fill_manual(values = c("Overall" = "green", "RoomToGrow" = "violet")) +
+  ggtitle("Players To Grow With Your Team", subtitle = "Plotted are the 20 players with the highest remaining room to grow") +
+  theme_fivethirtyeight() +
+  theme(legend.position = "none") +
+  geom_text(data = subset(holder, Mult == "Overall"), aes(x= Name, y= 10, label=paste(Position, Value, Age, sep = ", "))) +
+  annotate("text", x= 14.5, y= 80, label = "The 'potential' left \nin the player")
+####### Need to put in a left pointing arrow
+
+
+```
+
+# Free Valuation Players
+
+Are there some real bargains to be had? It would appear that there is! Below plots all players that have a free valuation, and displays a player's age against their current overall rating.
+
+**L. Paredes!!!!!**
+Depending on what you're looking for, either of the top-left or top-right quadrants are where the players to target are. The best player to target is *L. Paredes*, a fairly young CM at 24 with an overall rating of 80 (and even better still a potential of 85).
+
+*P. Mahlambi*, a South African CAM 20 year old with a potential of 84 is another big target, as is the 18 year old RCB *B. Méndez* and 19 year old CAM *I. Hagi*.
+
+```{r, message=FALSE, warning=FALSE, fig.width=12, fig.height=8}
+fifa_data %>%
+  filter(ValueNumeric_pounds == 0, PositionGroup != "Unknown") %>%
+  mutate(PotentialOver80 = ifelse(Potential >= 80, "Yes", "No")) %>%
+  ggplot(aes(x= Age, y= Overall)) +
+  geom_vline(xintercept = 30, color = "black", linetype = 2) +
+  geom_hline(yintercept = 65, color = "black", linetype = 2) +
+  geom_text(aes(label = Name, colour = PotentialOver80), check_overlap = T) +
+  scale_colour_manual(values = c("lightgrey", "purple")) +
+  theme_fivethirtyeight() +
+  theme(axis.text = element_text(face = "bold"), legend.position = "none") +
+  ggtitle("There's No Such Thing As A Free Lunch... Or Is There?", subtitle = "Plotting player age versus their overall rating for all players with a \nvaluation of €0. Purple names have potential over 80.") +
+  annotate("text", x= 20, y= 79, label = "Rebuilding \ntarget area", size = 8, color = "darkgreen") +
+  annotate("text", x= 43, y= 79, label = "Win-Now \ntarget area", size = 8, color = "darkgreen")
+  
+  
   
 ```
 
+***
+
+# Which Team do I want to manage
+
+This section is designed to help future managers decide what team to manage, based on various factors.
+
+I will include an analysis on the youngest and oldest teams, the most talented teams, the great attacking teams, most expensive teams and teams with the highest player valuations.
+
+## Team Age
+
+If you're the type of manager who likes to take charge of younger teams, then teams in some of the European teams might be for you. FC Nordsjælland (Danish) is the youngest team on average in FIFA19, with an average age of 20.3 years old, followed by FC Groningen (Dutch) at 21.4 years old and Bohemian FC (Ireland) at 21.5 years old. Interestingly, Dutch powerhouses PSV and Ajax both make the list of the 20 youngest teams. They're certainly the type of teams I'd be looking towards.
+
+At the other end of the spectrum, if managing older teams is your thing, then South America is the place for you.
+
+```{r, message=FALSE, warning=FALSE, fig.width=12, fig.height=8}
+age_avg <- mean(fifa_data$Age)
+age_sd <- sd(fifa_data$Age)
+
+team_age <- fifa_data %>%
+  group_by(Club) %>%
+  summarise(AvgAge = mean(Age)) %>%
+  mutate(AgeZ_score = (AvgAge - age_avg) / age_sd)
+
+team_age <- team_age %>%
+  mutate(AgeType = ifelse(AgeZ_score <0, "Below", "Above"))
+
+
+team_age <- team_age %>%
+  arrange(desc(AgeZ_score)) %>%
+  head(20) %>%
+  rbind(team_age %>% arrange(desc(AgeZ_score)) %>% tail(20))
+
+
+team_age %>%
+  ggplot(aes(x= reorder(Club,AgeZ_score), y= AgeZ_score)) +
+  geom_bar(stat = 'identity', aes(fill = AgeType), colour = "white") +
+  geom_text(aes(label = round(AvgAge,1))) +
+  scale_fill_manual(values = c("purple", "green")) +
+  coord_flip() +
+  ggtitle("Nordic Clubs Are Younger Than South American Clubs", subtitle = "Ranking the 20 oldest playing lists vs the 20 youngest playing lists") +
+  theme_fivethirtyeight() +
+  theme(legend.position = "none", axis.text.x = element_blank())
+
+
+```
+
+
+## Team Overall Talent
+
+If you're trying to pick the most talented team, how you choose to interpret "talent" can have an impact on which team you finally settle for.
+
+When looking at the average overall ratings for each team, four of the five highest average rated teams come from Serie A (Juventus, Napoli, Inter and Milan), with Real Madrid the only non-Italian side in the top 5. FC Barcelona, PSG, Roma, Man Utd and surprisingly SL Benfica rounding out the top 10.
+
+
+```{r,message=FALSE, warning=FALSE, fig.width=12, fig.height=8}
+
+top_20_overall_clubs <- fifa_data %>%
+  group_by(Club) %>%
+  summarise(AverageRating = mean(Overall, na.rm = T)) %>%
+  arrange(desc(AverageRating)) %>%
+  head(n = 20) %>% pull(Club) 
+
+fifa_data %>%
+  filter(Club %in% top_20_overall_clubs) %>%
+  mutate(Top3 = ifelse(Club %in% c("Juventus", "Napoli", "Inter"), "Yes", "No")) %>%
+  ggplot(aes(x= reorder(Club,Overall), y= Overall, fill = Top3)) +
+  geom_boxplot(color = "black") +
+  scale_fill_manual(values = c("lightgrey", "purple")) +
+  ggtitle("Italian Teams Have The Highest Overall Ratings", subtitle = "The average overall rating of the 20 highest rated teams in the game, sorted in descending order") +
+  coord_flip() +
+  theme_fivethirtyeight() +
+  theme(legend.position = "none")
+```
+
+
+Now if you wish to define "talent" as the most number of superstars, then your selection will be slightly different.
+
+I have chosen to define superstars as those players whose rating is 85 or above. There are `r sum(fifa_data$Overall >= 85)` 110 players in the game with this designation.
+
+Looking at the top three from the previous plot, we can see that it's a much different story. Juventus - the highest average overall rated team only have the third most amount of superstars, replaced at the top by Real Madrid and Manchester City. The story is even more pronounced for Napoli, who went from second in the previous measurement to 11th here, with Inter also dropping form 3rd to 8th.
+
+The Galacticos of Real Madrid proudly sit atop this perch with 12 players on the list having an overall rating of 85 or over.
+
+Interestingly, only the the top leagues are represented in the list of clubs with more than one superstar.
+
+```{r, message=FALSE, warning=FALSE, fig.width=12, fig.height=8}
+fifa_data %>%
+  mutate(ElitePlayers = ifelse(Overall >= 85, "Elite", "Not Elite")) %>%
+  group_by(Club, ElitePlayers) %>%
+  filter(ElitePlayers == "Elite") %>%
+  summarise(NumberElitePlayers = n()) %>%
+  filter(NumberElitePlayers >1) %>%
+  mutate(Top3 = ifelse(Club %in% c("Juventus", "Napoli", "Inter"), "Yes", "No")) %>%
+  arrange(desc(NumberElitePlayers)) %>%
+  ggplot(aes(x= reorder(Club,NumberElitePlayers), y= NumberElitePlayers, fill = Top3)) +
+  geom_col(color = "black") +
+  scale_fill_manual(values = c("lightgrey", "purple")) +
+  ggtitle("However If You Define Talent As Number Of Superstars", subtitle = "Plotted are clubs with more than one 'elite' player. Elite players being those with a rating greater than 85") +
+  scale_y_continuous(breaks = seq(0,12,1))+
+  coord_flip() +
+  theme_fivethirtyeight() +
+  theme(legend.position = "none")
+
+```
+
+
+## Deadly Teams Up Front
+
+How does one determine the most attacking teams? The method used in this analysis takes an average rating of the four main attributes related to goals - `Finishing`, `LongShots`, `Penalties`, `ShotPower` and `Positioning`. The attributes are added together and an average rating is calculated. To determine the teams with the highest attacking rating, only midfielders and attackers are considered.
+
+The average rating of the most dangerous teams in front of goals are displayed below. Inter (12 midfielders and attackers) and Juventus (13 midfielders and attackers) are the most dangerous teams in front of goal, clearly ahead of the third most dangerous club, Napoli (13 midfielders and attackers). Interestingly, there are a few leagues are represented in the 20 most dangerous teams up front - Portugese, Turkish, Greek, in addition to the usual suspects in England, Italy, Germany, Spain, France.
+
+
+```{r}
+fifa_data <- fifa_data  %>%
+  mutate(AttackingRating = (Finishing + LongShots + Penalties + ShotPower + Positioning) /5)
+
+fifa_data %>%
+  filter(PositionGroup %in% c("MID", "FWD")) %>%
+  group_by(Club) %>%
+  summarise(NumberOfAttackers = n(), TeamAttackingRating = mean(AttackingRating)) %>%
+  arrange(desc(TeamAttackingRating)) %>% head(50) %>%
+  kable() %>% kable_styling(bootstrap_options = c("striped", "hover","condensed", "responsive"))
+
+```
+
+
+## Team Wage Bills and Value for Money
+Real Madrid and Barcelona blow the other teams away when it comes to wage bills, with weekly wage bills sitting at just over €5M and €4.83M respectively. Man City is a distant third with a weekly wage bill of €3.7M.
+
+Surprisingly, Inter Milan, one of the most highly rated teams in terms of overall talent (see above) comes in at number 16 on the list - talk about value for money! Even more strangely, Premier League sides Everton and West Ham have higher wage bills than Inter! What's worse for those two EPL clubs, Milan, Napoli and Inter were three of the top five overall rated clubs in the game. As a result, these three clubs have had great value for money, with each overall rating point only costing Inter €20K, as opposed to Everton's €27K per overall rating. Of course this is dwarfed by the two Spaniards, who both spend over €60K per point.
+
+
+```{r, fig.width=12, fig.height=8}
+fifa_data %>% 
+  group_by(Club) %>% 
+  summarise(TotalWages = sum(WageNumeric_pounds, na.rm = T),
+            AverageRating = mean(Overall, na.rm = T)) %>%
+  mutate(ValueForMoney = TotalWages / AverageRating) %>%
+  arrange(desc(TotalWages)) %>% head(n= 20) %>%
+  mutate(Top2 = ifelse(Club %in% c("Real Madrid", "FC Barcelona"), "Top", ifelse(Club %in% c("Inter", "Milan", "Napoli"), "Val", "No"))) %>%
+  ggplot(aes(x= reorder(Club, TotalWages), y= TotalWages, fill = Top2)) +
+  geom_col(colour = "black") +
+  geom_text(aes(label = dollar(round(ValueForMoney), prefix = "€"), hjust = 0)) +
+  scale_fill_manual(values = c("lightgrey", "purple", "green")) +
+  scale_y_continuous(labels = dollar_format(prefix = "€")) +
+  coord_flip() +
+  ggtitle("The Spaniards Really Know How To Spend, \nBut Italians Are Shrewd", subtitle = "The 20 highest weekly wage bills in FIFA19 and how much one rating point costs in wages") +
+  theme_fivethirtyeight() +
+  theme(legend.position = "none")
+
+```
+
+
+At the other end of the spectrum, there are some clubs that are exceptionally efficient with their wage bills. Highlighted clubs are those that have an average overall rating over 70. Spartak Moscow are the leaders, wiht each rating point only costing €369 - what a difference from Real Madrid!
+
+```{r, fig.width=12, fig.height=8}
+fifa_data %>% 
+  group_by(Club) %>% 
+  filter(!is.na(Club)) %>%
+  summarise(TotalWages = sum(WageNumeric_pounds, na.rm = T),
+            AverageRating = mean(Overall, na.rm = T)) %>%
+  mutate(ValueForMoney = TotalWages / AverageRating) %>%
+  arrange(desc(ValueForMoney)) %>% tail(n= 20) %>%
+  mutate(Over70 = ifelse(AverageRating >= 70, "Yes", "No")) %>%
+  ggplot(aes(x= reorder(Club, -TotalWages), y= TotalWages, fill = Over70)) +
+  geom_col(colour = "black") +
+  geom_text(aes(label = dollar(round(ValueForMoney), prefix = "€"), hjust = 1)) +
+  scale_fill_manual(values = c("lightgrey", "green")) +
+  scale_y_continuous(labels = dollar_format(prefix = "€")) +
+  coord_flip() +
+  ggtitle("Extracting Value For Money", subtitle = "The 20 clubs who spend the least amount of wage pounds per overall rating point.\nHighlighted clubs have an average rating over 70") +
+  theme_fivethirtyeight() +
+  theme(legend.position = "none")
+
+```
+
+
+***
+
+# Next Steps:
+
+- Use k-means clustering to try to find "bargains"; ie if there is someone with the same skills/potential, can they be found for a bargain?
+- Model what a player's wage should be
+
 
 
 
 ```{r}
-# value_rating_lm <- lm(log(ValueNumeric_pounds +1) ~ Overall + AgeGroup + Potential + `International Reputation`, data = subset(fifa_data, PositionGroup == "MID"))
+epl <- c('Liverpool','Manchester City','Tottenham Hotspur', 'Chelsea', 'Arsenal','Manchester United','Watford',
+         'Wolverhampton Wanderers', 'Leicester City','West Ham United','Everton', 'Bournemouth','Brighton & Hove Albion',
+         'Crystal Palace','Southampton','Burnley', 'Newcastle United','Cardiff City','Fulham', 'Stoke City','Huddersfield Town')
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+fifa_data %>%
+  filter(PositionGroup != "Unknown") %>%
+  ggplot(aes(x= ValueNumeric_pounds, y= WageNumeric_pounds)) +
+  geom_point() +
+  facet_wrap(~ PositionGroup)
+
+
+fifa_data %>%
+  filter(PositionGroup != "Unknown" | PositionGroup != "GK") %>%
+  group_by(Position) %>%
+  summarise(n = n(), testCor = cor(Overall, ValueNumeric_pounds)) %>% View()
+
+
+```
+
+
+
+```{r}
+model_data <- fifa_data %>%
+  filter(PositionGroup != "Unknown") %>%
+  filter(PositionGroup != "GK") %>%
+  mutate(RoomToGrow = Potential - Overall)
+
+
+fit_lm <- lm(ValueNumeric_pounds  ~ Overall + AgeGroup + RoomToGrow + `International Reputation` + WageNumeric_pounds + PositionGroup + Special + `Skill Moves`, data = model_data)
+
+summary(fit_lm)
+
+hist(fit_lm$residuals)
+
+
+model_data$PredictedValue <- predict(fit_lm, model_data)
+
+model_data %>%
+  select(Name, Club, Age, ValueNumeric_pounds, PredictedValue) %>%
+  mutate(PredictionError = PredictedValue - ValueNumeric_pounds) %>%
+  arrange(desc(PredictionError)) %>% tail(20)
+
+
+```
+
+
+
+```{r}
+# Get data ready
+data_cluster <- fifa_data %>%
+  filter(PositionGroup != "Unknown") %>%
+  filter(PositionGroup != "GK") %>%
+  mutate(RoomToGrow = Potential - Overall) %>%
+  select_if(is.numeric) %>%
+  select(-X1, -ID, -`Jersey Number`, -AttackingRating, -starts_with("Value"), - starts_with("Wage"), -starts_with("GK"), -Overall)
+
+
+scaled_data <- scale(data_cluster)
+
+
+# Initialize total within sum of squares error: wss
+wss <- 0
+# For 1 to 15 cluster centers
+for (j in 1:30) {
+  km.out <- kmeans(scaled_data, centers = j, nstart = 20)
+  # Save total within sum of squares to wss variable
+  wss[j] <- km.out$tot.withinss
+}
+# Plot total within sum of squares vs. number of clusters
+plot(1:30, wss, type = "b", 
+     xlab = "Number of Clusters", 
+     ylab = "Within groups sum of squares")
+# Set k equal to the number of clusters corresponding to the elbow location
+k <- 8
+```
+
+
+```{r}
+
+# Create a k-means model on wisc.data: wisc.km
+wisc.km <- kmeans(scale(data_cluster), centers = 8, nstart = 20)
+
+diagnosis <- fifa_data %>%
+  filter(PositionGroup != "Unknown") %>%
+  filter(PositionGroup != "GK") %>% pull(PositionGroup)
+
+
+model_data <- fifa_data %>%
+  filter(PositionGroup != "Unknown") %>%
+  filter(PositionGroup != "GK") %>%
+  mutate(Cluster = wisc.km$cluster)
+
+
+cluster_analysis <- model_data %>%
+  select(ID, Name, Club, Age, PositionGroup, Overall, Cluster, ValueNumeric_pounds)
+
+
+table(cluster_analysis$Cluster, cluster_analysis$PositionGroup)
+
+
+cluster_analysis %>%
+  filter(Cluster == 6) %>%
+  arrange(desc(Overall)) %>% head(n=20) %>%
+  ggplot(aes(x= reorder(Name, Overall), y= ValueNumeric_pounds)) +
+  geom_col() +
+  coord_flip()
+
+
+
+cluster_analysis %>%
+  filter(Cluster == 6) %>%
+  arrange(desc(Overall)) %>% head(n=30) %>%
+  mutate(Under27 = ifelse(Age < 27, "Yes", "No")) %>%
+  ggplot(aes(x= Overall, ValueNumeric_pounds)) +
+  geom_text(aes(label = paste(Name, "(", Age, ")", sep = ""), colour = Under27), check_overlap = T)
+
+
+
+cluster_analysis %>%
+  filter(Cluster == 6) %>%
+  arrange(desc(Overall)) %>% head(n=30) %>%
+  mutate(Under27 = ifelse(Age < 27, "Yes", "No")) %>%
+  ggplot(aes(x= Overall, ValueNumeric_pounds)) +
+  geom_text(aes(label = paste(Name, " (", Age, ")", sep = ""), colour = Under27), check_overlap = T) +
+  facet_wrap(~ factor(Cluster))
+
+
+cluster_analysis %>%
+   group_by(Cluster) %>%
+   arrange(desc(Overall)) %>% top_n(n=30) %>%
+   mutate(Under27 = ifelse(Age < 27, "Yes", "No")) %>%
+   ggplot(aes(x= Overall, y= ValueNumeric_pounds)) +
+   geom_text(aes(label = paste(Name, "(", Age, ")", sep = ""), colour = Under27), check_overlap = T) +
+   facet_wrap(~ factor(Cluster), scales = "free", ncol = 2)
+
+
+# Compare k-means to actual diagnoses
+table(wisc.km$cluster, diagnosis)
+# Compare k-means to hierarchical clustering
+table(wisc.km$cluster, wisc.hclust.clusters)
+```
+
+
+
+
+
+```{r, include=FALSE}
+## Great Wall Of Defence
+
+# fifa_data <- fifa_data  %>%
+#   mutate(DefensiveRating = (Interceptions + Marking + SlidingTackle + StandingTackle + GKDiving + GKHandling + GKKicking + GKPositioning + GKReflexes) /9)
+# 
+# fifa_data %>%
+#   filter(PositionGroup %in% c("MID", "FWD")) %>%
+#   group_by(Club) %>%
+#   summarise(NumberOfAttackers = n(), TeamAttackingRating = mean(AttackingRating)) %>%
+#   arrange(desc(TeamAttackingRating)) %>% head(50) %>%
+#   kable() %>% kable_styling(bootstrap_options = c("striped", "hover","condensed", "responsive"))
+```
+
+
+
+```{r, include=FALSE}
+# value_rating_lm <- lm(ValueNumeric_pounds  ~ Overall + AgeGroup + Potential + `International Reputation` + WageNumeric_pounds, data = subset(fifa_data, PositionGroup == "MID"))
+# 
 # 
 # summary(value_rating_lm)
 # 
@@ -195,136 +698,4 @@ fifa_data %>%
 # fifa_data_MID$PredValue <- exp(predict(value_rating_lm, fifa_data_MID))
 
 ```
-
-
-# Free Valuation Players
-
-Are there some real bargains to be had?
-
-```{r}
-fifa_data %>%
-  filter(PositionGroup != "Unknown") %>%
-  filter(ValueNumeric_pounds == 0) %>%
-  ggplot(aes(x= Position, y= Overall)) +
-  geom_boxplot(color = "black", fill = "orange") +
-  coord_flip() +
-  facet_wrap(~ PositionGroup, scales = "free") +
-  theme_fivethirtyeight()
-
-fifa_data %>%
-  filter(ValueNumeric_pounds == 0, PositionGroup != "Unknown") %>%
-  ggplot(aes(x= Age, y= Overall, colour = PositionGroup)) +
-  geom_text(aes(label = Name), check_overlap = T) +
-  theme_fivethirtyeight() +
-  ggtitle("Free Valuation Players plotted by age and potential", subtitle = "If a mid is needed, L. Paredes would be a target - young, and Potential ~ 80")
-```
-
-
-
-
-# Manager Career
-
-If playing the manager career is your thing (like it is mine), the below analysis should hopefully guide you to pick a team to manage based on different variables that are important to you.
-
-Personally, I'm always wanting to take control of a young, attacking team...taking control of a powerhouse isn't really my thing - the expectation is far too great!
-
-# Which Leagues have the highest overall talent
-
-```{r}
-fifa_data %>%
-  ggplot(aes(x= Overall)) +
-  geom_histogram(color = "white", fill = "orange") +
-  ggtitle("Distribution of Player Overall Rating", subtitle = "Normally distributed so mean as measure of central tendancy appropriate") +
-  theme_fivethirtyeight() +
-  theme(axis.text.y = element_blank())
-```
-
-
-
-```{r}
-fifa_data %>%
-  group_by(Club) %>%
-  summarise(AverageRating = mean(Overall, na.rm = T)) %>%
-  arrange(desc(AverageRating)) %>%
-  head(n = 20) %>%
-  ggplot(aes(x= reorder(Club,AverageRating), y= AverageRating)) +
-  geom_col(fill = "lightgrey", color = "black") +
-  ggtitle("Teams with the highest average rating of players") +
-  coord_flip() +
-  theme_fivethirtyeight()
-  
-```
-
-
-```{r}
-sum(fifa_data$Overall >= 85)
-```
-
-```{r}
-fifa_data %>%
-  mutate(ElitePlayers = ifelse(Overall >= 85, "Elite", "Not Elite")) %>%
-  group_by(Club, ElitePlayers) %>%
-  filter(ElitePlayers == "Elite") %>%
-  summarise(NumberElitePlayers = n()) %>%
-  filter(NumberElitePlayers >1) %>%
-  arrange(desc(NumberElitePlayers)) %>%
-  ggplot(aes(x= reorder(Club,NumberElitePlayers), y= NumberElitePlayers)) +
-  geom_col(fill = "lightgrey", color = "black") +
-  ggtitle("Clubs with more than one 'elite' player", subtitle = "Elite players being those with a rating greater than 85") +
-  scale_y_continuous(breaks = seq(0,12,1))+
-  coord_flip() +
-  theme_fivethirtyeight()
-```
-
-
-```{r}
-fifa_data %>%
-  ggplot(aes(x= Potential)) +
-  geom_histogram(color = "white", fill = "orange") +
-  ggtitle("Distribution of Player Potential Rating", subtitle = "Normally distributed so mean as measure of central tendancy appropriate") +
-  theme_fivethirtyeight() +
-  theme(axis.text.y = element_blank())
-```
-
-
-
-```{r}
-fifa_data %>%
-  group_by(Club) %>%
-  summarise(AveragePotential = mean(Potential, na.rm = T)) %>%
-  arrange(desc(AveragePotential)) %>%
-  head(n = 20) %>%
-  ggplot(aes(x= reorder(Club,AveragePotential), y= AveragePotential)) +
-  geom_col(fill = "lightgrey", color = "black") +
-  ggtitle("Teams with the highest average Potential of players") +
-  coord_flip() +
-  theme_fivethirtyeight()
-  
-```
-
-
-```{r}
-sum(fifa_data$Overall >= 85)
-```
-
-```{r}
-fifa_data %>%
-  mutate(ElitePlayers = ifelse(Overall >= 85, "Elite", "Not Elite")) %>%
-  group_by(Club, ElitePlayers) %>%
-  filter(ElitePlayers == "Elite") %>%
-  summarise(NumberElitePlayers = n()) %>%
-  filter(NumberElitePlayers >1) %>%
-  arrange(desc(NumberElitePlayers)) %>%
-  ggplot(aes(x= reorder(Club,NumberElitePlayers), y= NumberElitePlayers)) +
-  geom_col(fill = "lightgrey", color = "black") +
-  ggtitle("Clubs with more than one 'elite' player", subtitle = "Elite players being those with a rating greater than 85") +
-  scale_y_continuous(breaks = seq(0,12,1))+
-  coord_flip() +
-  theme_fivethirtyeight()
-```
-
-
-
-
-
 
