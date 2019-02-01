@@ -42,10 +42,11 @@ library(tidyverse)
 library(scales)
 library(ggthemes)
 library(kableExtra)
+library(plotly)
 
 options(scipen = 999)
 
-fifa_data <- read_csv("../data/data.csv")
+fifa_data <- read_csv("data/data.csv")
 
 fifa_data <- fifa_data %>%
   mutate(ValueMultiplier = ifelse(str_detect(Value, "K"), 1000, ifelse(str_detect(Value, "M"), 1000000, 1))) %>%
@@ -497,78 +498,26 @@ fifa_data %>%
 
 ***
 
-# Next Steps:
 
-- Use k-means clustering to try to find "bargains"; ie if there is someone with the same skills/potential, can they be found for a bargain?
-- Model what a player's wage should be
+# K-Means Clustering
 
+Trying to find players who are similar can be a very difficult task. There are close to 100 variables that you might need to analyse to determine "similarity" between players. Couple that with comparing multiple players and it's almost imposible.
 
+Enter K-Means!
 
+K-means clustering aims to partition n observations into k clusters in which each observation belongs to the cluster with the nearest mean, serving as a prototype of the cluster. This results in a partitioning of the data space into Voronoi cells https://en.wikipedia.org/wiki/K-means_clustering.
 
-```{r}
-epl <- c('Liverpool','Manchester City','Tottenham Hotspur', 'Chelsea', 'Arsenal','Manchester United','Watford',
-         'Wolverhampton Wanderers', 'Leicester City','West Ham United','Everton', 'Bournemouth','Brighton & Hove Albion',
-         'Crystal Palace','Southampton','Burnley', 'Newcastle United','Cardiff City','Fulham', 'Stoke City','Huddersfield Town')
+The steps used are outlined below:
 
-```
+1. Filter out Goalkeepers and any players without a position listed
+2. Select only numeric variables, mainly the attribute variables. Player value, wages and overall rating have been omitted from the data so that these variables don't sway our groupings, allowing for the clusters to contain like-for-like players based off their skillsets.
+3. Scale the data - without scaling, some variables, especially `Special` will skew the clusters to than variable.
+4. Run K-Means using, looping through a number of cluster centres to find the optimal number (k). This can be done visually, where the elbow of the plot "bends".
+5. Set the number of centres (8 in this example)
+6. Re-run the model with K = 8
+7. Assign the cluster group back to the main data
 
-
-
-
-
-
-
-
-
-
-
-
-
-```{r}
-fifa_data %>%
-  filter(PositionGroup != "Unknown") %>%
-  ggplot(aes(x= ValueNumeric_pounds, y= WageNumeric_pounds)) +
-  geom_point() +
-  facet_wrap(~ PositionGroup)
-
-
-fifa_data %>%
-  filter(PositionGroup != "Unknown" | PositionGroup != "GK") %>%
-  group_by(Position) %>%
-  summarise(n = n(), testCor = cor(Overall, ValueNumeric_pounds)) %>% View()
-
-
-```
-
-
-
-```{r}
-model_data <- fifa_data %>%
-  filter(PositionGroup != "Unknown") %>%
-  filter(PositionGroup != "GK") %>%
-  mutate(RoomToGrow = Potential - Overall)
-
-
-fit_lm <- lm(ValueNumeric_pounds  ~ Overall + AgeGroup + RoomToGrow + `International Reputation` + WageNumeric_pounds + PositionGroup + Special + `Skill Moves`, data = model_data)
-
-summary(fit_lm)
-
-hist(fit_lm$residuals)
-
-
-model_data$PredictedValue <- predict(fit_lm, model_data)
-
-model_data %>%
-  select(Name, Club, Age, ValueNumeric_pounds, PredictedValue) %>%
-  mutate(PredictionError = PredictedValue - ValueNumeric_pounds) %>%
-  arrange(desc(PredictionError)) %>% tail(20)
-
-
-```
-
-
-
-```{r}
+```{r, message=FALSE, warning=FALSE, fig.width=12, fig.height=8}
 # Get data ready
 data_cluster <- fifa_data %>%
   filter(PositionGroup != "Unknown") %>%
@@ -580,89 +529,120 @@ data_cluster <- fifa_data %>%
 
 scaled_data <- scale(data_cluster)
 
-
+set.seed(109)
 # Initialize total within sum of squares error: wss
 wss <- 0
-# For 1 to 15 cluster centers
+# For 1 to 30 cluster centers
 for (j in 1:30) {
   km.out <- kmeans(scaled_data, centers = j, nstart = 20)
   # Save total within sum of squares to wss variable
   wss[j] <- km.out$tot.withinss
 }
-# Plot total within sum of squares vs. number of clusters
-plot(1:30, wss, type = "b", 
-     xlab = "Number of Clusters", 
-     ylab = "Within groups sum of squares")
+
+
+# create a DF to use in a ggplot visualisation
+wss_df <- data.frame(num_cluster = 1:30, wgss = wss)
+
+# plot to determine optimal k
+ggplot(data = wss_df, aes(x=num_cluster, y= wgss)) + 
+  geom_line(color = "lightgrey", size = 2) + 
+  geom_point(color = "green", size = 4) +
+  theme_fivethirtyeight() +
+  geom_curve(x=14, xend=8, y=300000, yend= 290500, arrow = arrow(length = unit(0.2,"cm")), size =1, colour = "purple") +
+  geom_text(label = "k = 8\noptimal level", x=14, y= 290000, colour = "purple") +
+  labs(title = "Using Eight Clusters To Group Players", subtitle = "Selecting the point where the elbow 'bends', or where the slope of \nthe Within groups sum of squares levels out")
+
+
 # Set k equal to the number of clusters corresponding to the elbow location
 k <- 8
-```
-
-
-```{r}
 
 # Create a k-means model on wisc.data: wisc.km
-wisc.km <- kmeans(scale(data_cluster), centers = 8, nstart = 20)
+wisc.km <- kmeans(scale(data_cluster), centers = k, nstart = 20)
 
-diagnosis <- fifa_data %>%
-  filter(PositionGroup != "Unknown") %>%
-  filter(PositionGroup != "GK") %>% pull(PositionGroup)
-
-
-model_data <- fifa_data %>%
+# add the cluster group back to the original DF for all players other than GK and Unknown
+cluster_data <- fifa_data %>%
   filter(PositionGroup != "Unknown") %>%
   filter(PositionGroup != "GK") %>%
   mutate(Cluster = wisc.km$cluster)
 
+```
 
-cluster_analysis <- model_data %>%
+K-means has split the data into the following 8 clusters as outlined below.
+
+It appears that clusters 4 and 8 are representing the more defensive-midfielder types (made up mainly of DEFs and MIDs). Cluster 7 looks to be grouping very attacking minded midfielders midfielders (mande up mainly of MIDs and FWDs).
+
+Cluster 2 is grouping Midfielders, Cluster 5 is for Forwards, while clusters 1 and 3 are for the Defenders.
+
+```{r, message=FALSE, warning=FALSE, fig.width=12, fig.height=8}
+# create a new DF with just some select variables for analysis
+cluster_analysis <- cluster_data %>%
   select(ID, Name, Club, Age, PositionGroup, Overall, Cluster, ValueNumeric_pounds)
 
-
+# how have the clusters been split between position groups
 table(cluster_analysis$Cluster, cluster_analysis$PositionGroup)
 
 
-cluster_analysis %>%
-  filter(Cluster == 6) %>%
-  arrange(desc(Overall)) %>% head(n=20) %>%
-  ggplot(aes(x= reorder(Name, Overall), y= ValueNumeric_pounds)) +
-  geom_col() +
-  coord_flip()
-
-
-
-cluster_analysis %>%
-  filter(Cluster == 6) %>%
-  arrange(desc(Overall)) %>% head(n=30) %>%
-  mutate(Under27 = ifelse(Age < 27, "Yes", "No")) %>%
-  ggplot(aes(x= Overall, ValueNumeric_pounds)) +
-  geom_text(aes(label = paste(Name, "(", Age, ")", sep = ""), colour = Under27), check_overlap = T)
-
-
-
-cluster_analysis %>%
-  filter(Cluster == 6) %>%
-  arrange(desc(Overall)) %>% head(n=30) %>%
-  mutate(Under27 = ifelse(Age < 27, "Yes", "No")) %>%
-  ggplot(aes(x= Overall, ValueNumeric_pounds)) +
-  geom_text(aes(label = paste(Name, " (", Age, ")", sep = ""), colour = Under27), check_overlap = T) +
-  facet_wrap(~ factor(Cluster))
-
-
-cluster_analysis %>%
-   group_by(Cluster) %>%
-   arrange(desc(Overall)) %>% top_n(n=30) %>%
-   mutate(Under27 = ifelse(Age < 27, "Yes", "No")) %>%
-   ggplot(aes(x= Overall, y= ValueNumeric_pounds)) +
-   geom_text(aes(label = paste(Name, "(", Age, ")", sep = ""), colour = Under27), check_overlap = T) +
-   facet_wrap(~ factor(Cluster), scales = "free", ncol = 2)
-
-
-# Compare k-means to actual diagnoses
-table(wisc.km$cluster, diagnosis)
-# Compare k-means to hierarchical clustering
-table(wisc.km$cluster, wisc.hclust.clusters)
+# create an arranged DF for analysis
+cluster_arranged <- cluster_analysis %>%
+  mutate(Cluster = as.character(Cluster)) %>%
+  arrange(desc(Overall)) %>% 
+  group_by(Cluster)
 ```
 
+
+Plotting the 20 highest rated players in each cluster shows us which players are similar in terms of their skill sets.
+
+```{r, message=FALSE, warning=FALSE, fig.width=15, fig.height=8}
+# build the plot for each of the 20 highest rated players in each cluster
+p  <- cluster_analysis %>%
+  mutate(Cluster = paste("Cluster: ", Cluster, sep = "")) %>%
+  arrange(desc(Overall)) %>% 
+  group_by(Cluster) %>%
+  slice(1:20) %>%
+  mutate(Under27 = ifelse(Age < 27, "Yes", "No")) %>%
+  ggplot(aes(x= Overall, y= ValueNumeric_pounds)) +
+  geom_point(position = "jitter", shape = 21, color = "black", size = 2, aes(text = paste(Name, PositionGroup), fill = Under27)) +
+  scale_fill_manual(values = c("purple", "green")) +
+  scale_y_continuous(labels = dollar_format(prefix = "€")) +
+  ggtitle("Player's overall rating plotted against their value for the \n20 highest rated players in each cluster") +
+  facet_wrap(~ factor(Cluster), scales = "free", ncol = 2) +
+  theme_fivethirtyeight() +
+  theme(legend.position = "none", strip.text = element_text(face = "bold", size = 12))
+
+# plot output
+ggplotly(p, height = 700, width = 900)
+
+```
+
+I am going to build a shiny app based off this clustering analysis to enable users to input a player they wish to find a similar replacement for, and the resulting output displaying a list of players and their attributes who are most similar.
+
+For example, selecting I. Perišić from Inter as someone to replicate, the below results will appear.
+
+The function will take three inputs, the player name how many players you want returned, and what how close to the player's value do you want to see results for (ie if you want all players within 10% of the player's value, use 0.1).
+
+```{r}
+return_similar_players <- function(player, num_results, return_within_fraction) {
+  
+  cluster_filter <- cluster_analysis$Cluster[cluster_analysis$Name == player]
+  player_value <- cluster_analysis$ValueNumeric_pounds[cluster_analysis$Name == player]
+  
+  cluster_analysis %>%
+    filter(Cluster == cluster_filter,
+           ValueNumeric_pounds >= (player_value * (1- return_within_fraction)) & ValueNumeric_pounds <= (player_value * (1 + return_within_fraction))) %>%
+    head(num_results)
+
+}
+
+
+return_similar_players("I. Perišić", 100, .05)
+
+```
+
+
+# Next Steps:
+
+- Model what a player's wage should be
+- Create code to create a "league" feature to be able to analyse each league
 
 
 
