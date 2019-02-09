@@ -187,32 +187,49 @@ fifa_data %>%
 ```
 
 
-## Correlation Matrix for all except GK
+## Correlations with a players Overall rating
 
-The below correlation matrix displays the correlation amongst attribute variables for all players except goalkeepers. The Pearson method is used here as Player Value hasn't been included, which is prone to extreme outliers that could skew the results.
+The below correlation matrix data displays the correlations between the Overall rating and other key attribute variables for all players except goalkeepers. Both the *Pearson* and *Spearman* correlation methods were used to display the differences. 
 
-The attributes with the highest positive correlation with a player's overall rating for non-GK players are:
+The *Spearman* correlation method is more robust with dealing with extreme outliers, hence the player `Value` having the highest spearman correlation (0.91). `Reactions`, `Composure`, `Special` and (surprisingly) `Wage` rounding out the top 5 correlated variables with Overall rating using the Spearman method. I say surprisingly because Soccernomics (Kuper.S, Szymanski.S, 2014) stated the best predictor of team success was the teams wage bill.
 
-- `Special`
-- `Reactions`
-- `Composure`
-- `Short Passing`
-- `Ball Control`
+Using the *Pearson* method, we get different results. the top 5 correlated variables with the Overall rating is `Reactions`, `Composure`, `Special`, `ShortPassing` and `BallControl`. Both value and wage don't appear ni this list because they are prone to large outliers. 
 
-`Balance` has the lowest correlation with a player's overall rating.
 
 ```{r, message=FALSE, warning=FALSE, fig.width=12, fig.height=12}
 gk_vars <- fifa_data %>% select(contains("GK")) %>% names()
 
 
-test <- fifa_data %>%
+spearman_cor_with_overall <- fifa_data %>%
   filter(Position != "GK") %>%
   select_if(is.numeric) %>%
-  select(-gk_vars, -ID, -X1, -starts_with("Value"), - `Jersey Number`, -starts_with("Wage")) %>%
+  select(-gk_vars, -ID, -X1, - `Jersey Number`, -ValueMultiplier, -WageMultiplier) %>% 
   as.matrix() %>%
   na.omit() %>%
-  cor() %>% 
-  corrplot::corrplot(method = "square")
+  cor(method = "spearman") 
+
+pearson_cor_with_overall <- fifa_data %>%
+  filter(Position != "GK") %>%
+  select_if(is.numeric) %>%
+  select(-gk_vars, -ID, -X1, - `Jersey Number`, -ValueMultiplier, -WageMultiplier) %>% 
+  as.matrix() %>%
+  na.omit() %>%
+  cor()
+
+cor_colnames <- colnames(spearman_cor_with_overall)
+
+spearman_cor_with_overall <- spearman_cor_with_overall[,2] %>% data.frame()
+spearman_cor_with_overall <- cbind(cor_colnames, spearman_cor_with_overall) %>% arrange(desc(`.`))
+
+pearson_cor_with_overall <- pearson_cor_with_overall[,2] %>% data.frame()
+pearson_cor_with_overall <- cbind(cor_colnames, pearson_cor_with_overall) %>% arrange(desc(`.`))
+
+spearman_cor_with_overall %>% left_join(pearson_cor_with_overall, by = "cor_colnames") %>% 
+  rename(Feature = cor_colnames, Spearman = `..x`, Pearson = `..y`) %>% filter(Feature != "Overall") %>% head(10)
+
+
+# spearman_cor_with_overall %>% left_join(pearson_cor_with_overall, by = "cor_colnames") %>% 
+#   rename(Feature = cor_colnames, Spearman = `..x`, Pearson = `..y`) %>% filter(Feature != "Overall") %>% tail(10)
 
 ```
 
@@ -643,7 +660,6 @@ return_similar_players("I. Perišić", 100, .05)
 
 - Model what a player's wage should be
 - Create code to create a "league" feature to be able to analyse each league
-
 
 
 
