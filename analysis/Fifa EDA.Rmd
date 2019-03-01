@@ -307,6 +307,28 @@ holder %>%
 
 ```
 
+
+## When does potential end?
+
+This now raises an interesting topic... is there an age that players finally realise all of their potential, or is there room to grow throughout their careers?
+
+It appears as though a player's potential and their overall rating converge at approximately 30 years of age.
+
+```{r, message=FALSE, warning=FALSE, fig.width=12, fig.height=8}
+fifa_data %>%
+  group_by(Age) %>%
+  summarise(Potential = mean(Potential),
+            Overall = mean(Overall)) %>%
+  ggplot(aes(x= Age)) +
+  geom_line(aes(y= Potential), color = "purple", size = 1) +
+  geom_line(aes(y= Overall), color = "grey50", size = 1) +
+  annotate("text", x= 30, y=71, label = "Potential meets overall\ntalent at 29 years old", color = "purple") +
+  ggtitle("Potential And Overall Talent Converges", subtitle = "The average ratings were taken for each age") +
+  theme_fivethirtyeight()
+```
+
+
+
 # Free Valuation Players
 
 Are there some real bargains to be had? It would appear that there is! Below plots all players that have a free valuation, and displays a player's age against their current overall rating.
@@ -660,6 +682,45 @@ return_similar_players("I. Perišić", 100, .05)
 
 - Model what a player's wage should be
 - Create code to create a "league" feature to be able to analyse each league
+
+Thanks to Sthya's kernel: https://www.kaggle.com/phimcpsy/premier-league-fifa-19-player-analysis
+
+```{r}
+prem_Leg_Clubs <- c("Arsenal","Bournemouth", "Brighton & Hove Albion", "Burnley", "Cardiff City", "Chelsea", "Crystal Palace",
+                  "Everton", "Fulham", "Huddersfield Town", "Leicester City", "Liverpool", "Manchester City", 
+                  "Manchester United", "Newcastle United", "Southampton", "Tottenham Hotspur", 
+                  "Watford", "West Ham United", "Wolverhampton Wanderers")
+
+
+laLiga_Clubs <- c("Atlético Madrid","FC Barcelona", "Real Madrid", "Athletic Club de Bilbao", "Real Betis", 
+                "RC Celta", "RCD Espanyol","Real Sociedad", "Valencia CF", "Real Valladolid CF", 
+                "Deportivo Alavés", "SD Eibar", "Rayo Vallecano", "Sevilla FC", 
+                "Villarreal CF", "Levante UD", "Getafe CF","CD Leganés", "Girona FC", 
+                "SD Huesca")
+
+
+bundes_Clubs <- c("FC Bayern München","Borussia Dortmund", "Borussia Mönchengladbach", "SC Freiburg", 
+                "Bayer 04 Leverkusen", "FC Schalke 04", "VfB Stuttgart",
+                  "SV Werder Bremen", "Hertha BSC", "1. FSV Mainz 05", "1. FC Nürnberg", 
+                "VfL Wolfsburg", "Hannover 96", "Eintracht Frankfurt", "TSG 1899 Hoffenheim", 
+                "FC Augsburg", "Fortuna Düsseldorf", "RB Leipzig")
+
+
+ligue1_Clubs <- c("FC Girondins de Bordeaux","En Avant de Guingamp", "LOSC Lille", "Olympique Lyonnais", 
+                "AS Monaco", "Montpellier HSC", "FC Nantes","OGC Nice", "Paris Saint-Germain", 
+                "Stade Rennais FC", "RC Strasbourg Alsace", "Stade Malherbe Caen", "Olympique de Marseille", 
+                  "Nîmes Olympique", "Stade de Reims", "Angers SCO", "Toulouse Football Club", 
+                  "Amiens SC", "AS Saint-Étienne", "Dijon FCO")
+
+
+serieA_Clubs <- c("Atalanta","Inter", "Juventus", "Lazio", "Milan", "Napoli", "Parma",
+                  "Roma", "Torino", "Udinese", "Bologna", "Chievo Verona", "Empoli", 
+                  "Sampdoria", "Cagliari", "Fiorentina", "Genoa", 
+                  "Frosinone", "Sassuolo", "SPAL")
+
+```
+
+
 
 
 
