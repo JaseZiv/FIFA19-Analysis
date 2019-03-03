@@ -661,6 +661,33 @@ return_similar_players("I. Perišić", 100, .05)
 - Model what a player's wage should be
 - Create code to create a "league" feature to be able to analyse each league
 
+# Predict Value For Bargains and Cash Cows
+
+Reading Soccernomics, a key thread of successful clubs was they knew when to get rid of players when a potential suitor was willing to pay for a player much more than what they were worth.
+
+This section will look to predict the price of players, and then determine which players should be sold, and which should be purchased relative to their valuation.
+
+Overall rating should be all that is needed for a game like this, unless you're playing manager mode and wanting players for a long time.
+
+```{r}
+model_data <- fifa_data %>% filter(!PositionGroup %in% c("GK", "Unknown"))
+
+value_rating_lm <- lm(ValueNumeric_pounds  ~ Overall + AgeGroup + PositionGroup + `International Reputation` + WageNumeric_pounds, data = model_data)
+
+summary(value_rating_lm)
+
+hist(value_rating_lm$residuals)
+
+predicted_value <- predict(value_rating_lm, model_data)
+
+
+model_data <- model_data %>%
+  select(Name, Age, Overall, Position, Club, ValueNumeric_pounds) %>%
+  cbind(predicted_value) %>%
+  mutate(SellOrBuy = ifelse(predicted_value <= ValueNumeric_pounds, "Sell", "Buy"))
+
+```
+
 
 
 ```{r, include=FALSE}
