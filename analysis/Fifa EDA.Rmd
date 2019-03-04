@@ -105,6 +105,39 @@ fifa_data %>%
 ```
 
 
+## Age vs Overall Rating
+
+Athletes in all domains have no doubt been looking for the elixir of life since the dawn of time, but to no avail unfortunately. When it comes to a player's overall rating, it appears as though player ratings are growing on average until around 30 years of age, whereby they level off for a couple of years, and then start the inevitable decline at around 34 years.
+
+```{r, fig.width=12, fig.height=8}
+fifa_data %>%
+  filter(!PositionGroup %in% c("GK", "Unknown")) %>%
+  group_by(Age) %>%
+  summarise(Rating = mean(Overall)) %>%
+  ggplot(aes(x= Age, y= Rating, group = 1)) +
+  geom_line(color = "grey50", size = 1) +
+  ggtitle("The Age Curve Flattens Off", subtitle = "Player ratings tend not to get better after the age of 30") +
+  xlab("Age") +
+  theme_fivethirtyeight() +
+  theme(axis.title = element_text(), axis.title.y = element_blank(), axis.title.x = element_text(face = "bold"))
+```
+
+
+When this relationship is explored by the major position groups, we can see that defender ratings tend to beging their decline earliest at around 33 years of age, while the decline starts somewher closer to 35 for both attackers and midfielders.  
+
+```{r, fig.width=12, fig.height=8}
+fifa_data %>%
+  filter(!PositionGroup %in% c("GK", "Unknown")) %>%
+  group_by(PositionGroup, Age) %>%
+  summarise(Rating = mean(Overall)) %>%
+  ggplot(aes(x= Age, y= Rating, group = PositionGroup)) +
+  geom_line(size = 1, color = "grey50") +
+  theme_fivethirtyeight() +
+  facet_wrap(~ PositionGroup, ncol = 1) +
+  theme(strip.background = element_rect(fill = "darkgrey"), strip.text = element_text(colour = "white", face = "bold"))
+```
+
+
 # Player Valuations
 
 Player valuations show a heavily positive skew, being skewed by the superstars of the game - Messi, Neymar, De Bryune, etc.
@@ -132,7 +165,7 @@ p +
 
 It is intuitive to think that players get better with age and experience and that their valuations would refelect this relationship.
 
-Plotting the relationship below, it can be seen that as players age, their valuations tend to increase up to their early 30s, and then begin declining in the years of age between 31-35, and then rapidly decline for players older than 35.
+Plotting the relationship below, it can be seen that as players age, their valuations tend to increase up to their early 30s, and then begin declining in the years of age between 31-35, and then rapidly decline for players older than 35. This is in line with the findings when the overall rating was plotted as a function of the player's age.
 
 ```{r, message=FALSE, warning=FALSE, fig.width=12, fig.height=8}
 fifa_data %>%
@@ -142,27 +175,6 @@ fifa_data %>%
   ggtitle("Players Are In High Demand In Their Mid-20s", subtitle = "Valuation on a log scale, so differences \nbetween the age groups are significant") +
   theme_fivethirtyeight()
 ```
-
-
-```{r}
-fifa_data %>%
-  filter(!PositionGroup %in% c("GK", "Unknown")) %>%
-  group_by(Age) %>%
-  summarise(Rating = mean(Overall)) %>%
-  ggplot(aes(x= Age, y= Rating, group = 1)) +
-  geom_line() +
-  theme_fivethirtyeight()
-
-fifa_data %>%
-  filter(!PositionGroup %in% c("GK", "Unknown")) %>%
-  group_by(PositionGroup, Age) %>%
-  summarise(Rating = mean(Overall)) %>%
-  ggplot(aes(x= Age, y= Rating, group = PositionGroup)) +
-  geom_line() +
-  facet_wrap(~ PositionGroup) +
-  theme_fivethirtyeight()
-```
-
 
 
 ## Position vs Valuations
@@ -706,16 +718,30 @@ return_similar_players("I. Perišić", 100, .05)
 
 # Predict Value For Bargains and Cash Cows
 
-Reading Soccernomics, a key thread of successful clubs was they knew when to get rid of players when a potential suitor was willing to pay for a player much more than what they were worth.
+Reading Soccernomics, a key thread of successful clubs was they knew when to get rid of players when a potential suitor was willing to pay much more for a player than what they were worth.
 
-This section will look to predict the price of players, and then determine which players should be sold, and which should be purchased relative to their valuation.
+This section will look to predict the price of players, and then determine which players should be sold, and which should be purchased relative to their valuation. Goalkeepers will be excluded from the model - there is too much noise when they are included.
+
+Linear regression will be used as a really easy way to perform this regression prediction problem, however we could also use regression trees or gradient boosting methods...perhaps in a later edition of this kernel?!
+
+The features to be used in the model are:
+
+* `Overall`
+* `AgeGroup`
+* `PositionGroup`
+* `International Reputation`
+* `Wage`
 
 Overall rating should be all that is needed for a game like this, unless you're playing manager mode and wanting players for a long time.
 
 ```{r}
-model_data <- fifa_data %>% filter(!PositionGroup %in% c("GK", "Unknown"))
 
-value_rating_lm <- lm(ValueNumeric_pounds  ~ Overall + AgeGroup + PositionGroup + `International Reputation` + WageNumeric_pounds, data = model_data)
+model_data <- fifa_data %>% filter(!PositionGroup %in% c("GK", "Unknown")) %>% 
+  mutate(RoomToGrow = Potential - Overall, 
+         RTG = ifelse(RoomToGrow > 0, "Yes", "No"),
+         Pot_to_Age = Potential / Age)
+
+value_rating_lm <- lm(ValueNumeric_pounds  ~ Overall + AgeGroup + PositionGroup + `International Reputation` + WageNumeric_pounds + `Skill Moves` + RTG + Pot_to_Age, data = model_data)
 
 summary(value_rating_lm)
 
@@ -725,9 +751,33 @@ predicted_value <- predict(value_rating_lm, model_data)
 
 
 model_data <- model_data %>%
+  select(Name, Age, Potential, Overall, Position, Club, ValueNumeric_pounds) %>%
+  cbind(predicted_value) %>%
+  mutate(SellOrBuy = ifelse(predicted_value <= ValueNumeric_pounds, "Sell", "Buy"))
+
+
+
+##########
+
+# Random Forest
+library(rpart)
+
+model_data <- fifa_data %>% filter(!PositionGroup %in% c("GK", "Unknown"))
+
+value_rating_rf <- rpart(ValueNumeric_pounds  ~ Overall + Age + Position + `International Reputation` + WageNumeric_pounds, 
+                                data = model_data)
+
+plot(value_rating_rf)
+
+predicted_value <- predict(value_rating_rf, model_data)
+
+
+model_data_rf <- model_data %>%
   select(Name, Age, Overall, Position, Club, ValueNumeric_pounds) %>%
   cbind(predicted_value) %>%
   mutate(SellOrBuy = ifelse(predicted_value <= ValueNumeric_pounds, "Sell", "Buy"))
+
+
 
 ```
 
