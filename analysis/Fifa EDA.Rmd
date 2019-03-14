@@ -46,17 +46,17 @@ library(plotly)
 
 options(scipen = 999)
 
-fifa_data <- read_csv("data/data.csv")
+fifa_data <- read_csv("data/data.csv") %>% select(-X1)
 
 fifa_data <- fifa_data %>%
   mutate(ValueMultiplier = ifelse(str_detect(Value, "K"), 1000, ifelse(str_detect(Value, "M"), 1000000, 1))) %>%
-  mutate(ValueNumeric_pounds = as.numeric(str_extract(Value, "[0-9]+")) * ValueMultiplier) %>%
+  mutate(ValueNumeric_pounds = as.numeric(str_extract(Value, "[[:digit:]]+\\.*[[:digit:]]*")) * ValueMultiplier) %>%
   mutate(Position = ifelse(is.na(Position), "Unknown", Position))
 
 
 fifa_data <- fifa_data %>%
   mutate(WageMultiplier = ifelse(str_detect(Wage, "K"), 1000, ifelse(str_detect(Wage, "M"), 1000000, 1))) %>%
-  mutate(WageNumeric_pounds = as.numeric(str_extract(Wage, "[0-9]+")) * WageMultiplier)
+  mutate(WageNumeric_pounds = as.numeric(str_extract(Wage, "[[:digit:]]+\\.*[[:digit:]]*")) * WageMultiplier)
 
 
 positions <- unique(fifa_data$Position)
@@ -209,7 +209,7 @@ gridExtra::grid.arrange(a, b)
 
 ## Player Rating and Valuations
 
-There a strong positive relationship between the players rating and valuation with a Spearman correlation of 0.9063. The Spearman method was used to calculate the correlation because of presence of large outliers. 
+There a strong positive relationship between the players rating and valuation with a Spearman correlation of `r round(cor(fifa_data$Overall, fifa_data$ValueNumeric_pounds, method = "spearman"),4))`. The Spearman method was used to calculate the correlation because of presence of large outliers. 
 
 ```{r, message=FALSE, warning=FALSE, fig.width=12, fig.height=8}
 fifa_data %>%
@@ -228,7 +228,7 @@ fifa_data %>%
 
 The below correlation matrix data displays the correlations between the Overall rating and other key attribute variables for all players except goalkeepers. Both the *Pearson* and *Spearman* correlation methods were used to display the differences. 
 
-The *Spearman* correlation method is more robust with dealing with extreme outliers, hence the player `Value` having the highest spearman correlation (0.91). `Reactions`, `Composure`, `Special` and (surprisingly) `Wage` rounding out the top 5 correlated variables with Overall rating using the Spearman method. I say surprisingly because Soccernomics (Kuper.S, Szymanski.S, 2014) stated the best predictor of team success was the teams wage bill.
+The *Spearman* correlation method is more robust with dealing with extreme outliers, hence the player `Value` having the highest spearman correlation (0.92). `Reactions`, `Composure`, `Special` and (surprisingly) `Wage` rounding out the top 5 correlated variables with Overall rating using the Spearman method. I say surprisingly because Soccernomics (Kuper.S, Szymanski.S, 2014) stated the best predictor of team success was the teams wage bill.
 
 Using the *Pearson* method, we get different results. the top 5 correlated variables with the Overall rating is `Reactions`, `Composure`, `Special`, `ShortPassing` and `BallControl`. Both value and wage don't appear ni this list because they are prone to large outliers. 
 
@@ -240,7 +240,7 @@ gk_vars <- fifa_data %>% select(contains("GK")) %>% names()
 spearman_cor_with_overall <- fifa_data %>%
   filter(Position != "GK") %>%
   select_if(is.numeric) %>%
-  select(-gk_vars, -ID, -X1, - `Jersey Number`, -ValueMultiplier, -WageMultiplier) %>% 
+  select(-gk_vars, -ID, - `Jersey Number`, -ValueMultiplier, -WageMultiplier) %>% 
   as.matrix() %>%
   na.omit() %>%
   cor(method = "spearman") 
@@ -248,7 +248,7 @@ spearman_cor_with_overall <- fifa_data %>%
 pearson_cor_with_overall <- fifa_data %>%
   filter(Position != "GK") %>%
   select_if(is.numeric) %>%
-  select(-gk_vars, -ID, -X1, - `Jersey Number`, -ValueMultiplier, -WageMultiplier) %>% 
+  select(-gk_vars, -ID, - `Jersey Number`, -ValueMultiplier, -WageMultiplier) %>% 
   as.matrix() %>%
   na.omit() %>%
   cor()
@@ -262,7 +262,7 @@ pearson_cor_with_overall <- pearson_cor_with_overall[,2] %>% data.frame()
 pearson_cor_with_overall <- cbind(cor_colnames, pearson_cor_with_overall) %>% arrange(desc(`.`))
 
 spearman_cor_with_overall %>% left_join(pearson_cor_with_overall, by = "cor_colnames") %>% 
-  rename(Feature = cor_colnames, Spearman = `..x`, Pearson = `..y`) %>% filter(Feature != "Overall") %>% head(10)
+  rename(Feature = cor_colnames, Spearman = `..x`, Pearson = `..y`) %>% filter(Feature != "Overall") %>% head(10) %>% DT::datatable()
 
 
 # spearman_cor_with_overall %>% left_join(pearson_cor_with_overall, by = "cor_colnames") %>% 
@@ -282,7 +282,7 @@ tile_data <- fifa_data %>%
   select(-gk_vars) %>%
   left_join(fifa_data %>% select(ID, Position, PositionGroup), by = "ID") %>%
   filter(Overall >= 70) %>%
-  select(-X1, -ID, -`International Reputation`, -`Jersey Number`, -`Skill Moves`, -Special, -ValueMultiplier, -ValueNumeric_pounds, -`Weak Foot`, -Age, -Overall, -Potential, -starts_with("Wage"))
+  select(-ID, -`International Reputation`, -`Jersey Number`, -`Skill Moves`, -Special, -ValueMultiplier, -ValueNumeric_pounds, -`Weak Foot`, -Age, -Overall, -Potential, -starts_with("Wage"))
 
 
 tile_data <- tile_data %>%
@@ -516,7 +516,7 @@ fifa_data %>%
   group_by(Club) %>%
   summarise(NumberOfAttackers = n(), TeamAttackingRating = mean(AttackingRating)) %>%
   arrange(desc(TeamAttackingRating)) %>% head(50) %>%
-  kable() %>% kable_styling(bootstrap_options = c("striped", "hover","condensed", "responsive"))
+  DT::datatable()
 
 ```
 
@@ -548,7 +548,7 @@ fifa_data %>%
 ```
 
 
-At the other end of the spectrum, there are some clubs that are exceptionally efficient with their wage bills. Highlighted clubs are those that have an average overall rating over 70. Spartak Moscow are the leaders, wiht each rating point only costing €369 - what a difference from Real Madrid!
+At the other end of the spectrum, there are some clubs that are exceptionally efficient with their wage bills. Highlighted clubs are those that have an average overall rating over 70. Spartak Moscow are the leaders, with each rating point only costing €369 - what a difference from Real Madrid!
 
 ```{r, fig.width=12, fig.height=8}
 fifa_data %>% 
@@ -600,7 +600,7 @@ data_cluster <- fifa_data %>%
   filter(PositionGroup != "GK") %>%
   mutate(RoomToGrow = Potential - Overall) %>%
   select_if(is.numeric) %>%
-  select(-X1, -ID, -`Jersey Number`, -AttackingRating, -starts_with("Value"), - starts_with("Wage"), -starts_with("GK"), -Overall)
+  select(-ID, -`Jersey Number`, -AttackingRating, -starts_with("Value"), - starts_with("Wage"), -starts_with("GK"), -Overall)
 
 
 scaled_data <- scale(data_cluster)
@@ -710,7 +710,7 @@ return_similar_players <- function(player, num_results, return_within_fraction) 
 }
 
 
-return_similar_players("I. Perišić", 100, .05)
+return_similar_players("I. Perišić", 100, .05) %>% DT::datatable()
 
 ```
 
